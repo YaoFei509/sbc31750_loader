@@ -44,7 +44,7 @@
         \								\
         \                      Interrupt routines			\
         \								\
-        \       0100--------------------------------------------	\
+        \       0100 F900 --------------------------------------	\
         \								\
 	\		Standard Input and Output routines		\
 	\								\
@@ -62,8 +62,8 @@
         \								\
         \								\
         \                          User RAM				\
-        \								\
-        \								\
+        \       f800-------------------------------------------		\
+        \			Loader running here			\
         \       ffff--------------------------------------------	\
         \								\
         \								\
@@ -81,6 +81,7 @@ USARTD2 equ     0520
 USARTC2 equ     0521
 RD      equ     8000			\read offset for xio's
 link	equ	0080			\interrupt link area
+LOADERS equ     f800                    \Start address for loader 
 PStkLo	equ	fa00			\bottom of parser stack
 PStkHi	equ	faff			\top of parser stack
 PrsHeap	equ	f900
@@ -179,37 +180,41 @@ iint15  lst     link+2a
 org 0100
 
 \*******************************************************************\
-\ STDIO - these routines implement standard I/O functions for the   \
-\         GSDB board (INCHx, OUTCHx, WORDRDx, WORDWRx .... etc)	    \
+\     Reset and move loader from ROM to RAM			    \
 \*******************************************************************\
 
 rst_mov	xio	r6,  8410
 	andm	r6,  400c
 	bez	no_bpu
 	mpen
-	lim	r6,  0100
+	lim	r6,  0100		\Wait BPU
 bpu_wt	soj	r6,  bpu_wt	,r14
+
 no_bpu	xorr	r6,  r6			\source address=0000
 	lr	r4,  r14		\destination addr=offset addr (0000)
 	lr	r13,  r14
 	lim     r5,  0100		\r5=length of ivet (256 words)
 	xio	r0,  esur		\enable start-up-rom ready for move
-	mov	r4,  r6			\move the code
+	mov	r4,  r6			\move the 1st 256 words from ROM to SRAM
 	
+	lim 	r14, LOADERS
 	xorr	r6,  r6			\move code
-	lim 	r4,  f800
-	lim 	r5,  0500
-	mov	r4,  r6
-	lim	r14, f800
+	lr 	r4,  r14
+	lim 	r5,  0500		\Length of Loader
+	mov	r4,  r6			\Move Loader for low memory to high
+
 	lr	r13, r14
 	xio	r0,  dsur		\disable start-up-rom after move
 	jc      f,   setup	,r14    \jump to parser setup routines
 
 
+\*******************************************************************\
+\ STDIO - these routines implement standard I/O functions for the   \
+\         GSDB board (INCHx, OUTCHx, WORDRDx, WORDWRx .... etc)	    \
+\*******************************************************************\
+
 offset2	equ	0020
 current	data	0000			\current address pointer
-
-
 crlf	pshm    r11, r12		\prints a CR & LF (newline) to port1
 	lim	r12, 0a0d		\setup r12 = 0d0a
 	br	prt0
@@ -351,7 +356,6 @@ dobann  pshm    r10, r12
 	sjs	r15, crlf	,r14
         popm    r10, r12
 	urs	r15
-
 
 \*************************** Main Title With Graphics *************************\
 ban	text	Yao Fei MIL-STD-1750A SBC Console V2.0\n\r
